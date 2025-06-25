@@ -1,0 +1,5 @@
+fastapi
+pydantic
+uvicorn[standard]
+google-cloud-aiplatform[adk,agent_engines]
+google-adk
