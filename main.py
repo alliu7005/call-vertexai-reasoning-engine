@@ -1,5 +1,5 @@
 import os, uuid
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -39,18 +39,19 @@ class ChatResponse(BaseModel):
 class LoginRequest(BaseModel):
     scope: Any
     auth_server: str
-    user_id: str
+    return_window: str
 
 vae_init(project=PROJECT, location=LOCATION)
 
 SESSION_SERVICE = VertexAiSessionService(project=PROJECT, location=LOCATION)
 
 
-@app.post("/login")
-def login(req: LoginRequest):
+@app.get("/login")
+def login(req: LoginRequest = Depends()):
     
     params = {
         "scopes": req.scope,
+        "return_url": req.return_window
     }
     qs = urllib.parse.urlencode(params)
     return RedirectResponse(
