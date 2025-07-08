@@ -19,6 +19,7 @@ EXPOSE 8080
 
 ENV LOCATION="us-central1"
 ENV PROJECT="365383383851"
+ENV GOOGLE_CLOUD_PROJECT="pivotal-keep-461818-j4"
 
 # 9) Run Uvicorn when the container starts
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]

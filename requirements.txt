@@ -1,5 +1,5 @@
 fastapi
-pydantic
+pydantic==2.11.7
 uvicorn[standard]
-google-cloud-aiplatform[adk,agent_engines]
+google-cloud-aiplatform[adk,agent_engines]==1.100.0
 google-adk
