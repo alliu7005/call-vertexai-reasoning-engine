@@ -11,14 +11,16 @@ import asyncio
 import uvicorn
 from google import auth as google_auth
 from google.auth.transport import requests as google_requests
-import requests
+from google.oauth2 import service_account
+from google.cloud import secretmanager
 import json
+from vertexai.preview import reasoning_engines
+import requests
 
-
-
-PROJECT   = os.getenv("PROJECT")
-PROJECT_NAME = os.getenv("GOOGLE_CLOUD_PROJECT")
-LOCATION  = os.getenv("LOCATION","us-central1")
+PROJECT_ID = "agentcore-465415"
+#PROJECT_NUMBER = os.getenv("GOOGLE_CLOUD_PROJECT_NUMBER")
+LOCATION  = "us-central1"
+STAGING_BUCKET = "gs://vertexai-storage-bucket"
 
 app = FastAPI()
 
@@ -48,16 +50,9 @@ class LoginRequest(BaseModel):
     auth_server: str
     return_window: str
 
-vae_init(project=PROJECT, location=LOCATION)
+#vae_init(project=PROJECT_ID, location=LOCATION, staging_bucket=STAGING_BUCKET)
 
-
-SESSION_SERVICE = VertexAiSessionService(project=PROJECT, location=LOCATION)
-
-def get_identity_token():
-    credentials, _ = google_auth.default()
-    auth_request = google_requests.Request()
-    credentials.refresh(auth_request)
-    return credentials.token
+SESSION_SERVICE = VertexAiSessionService(project=PROJECT_ID, location=LOCATION)
 
 
 @app.get("/login")
@@ -74,7 +69,7 @@ def login(req: LoginRequest = Depends()):
 
 @app.post("/chat")
 def chat(req: ChatRequest):
-    app_name=f"projects/{PROJECT}/locations/{LOCATION}/reasoningEngines/{req.agent_id}"
+    app_name=req.agent_id
     print("APPNAME:", app_name)
 
     remote_app = agent_engines.get(app_name)
@@ -87,27 +82,11 @@ def chat(req: ChatRequest):
         session_id = req.session_id
     
     print("SESSION_ID:",session_id)
-    print("REMOTE_APP:", remote_app.__repr__)
+    print("REMOTE_APP:", remote_app.project, remote_app.to_dict())
     payload = (
         f"OAuth token: {req.token}\n\n"
         f"{req.prompt}"
     )
-    #r = requests.post(
-    #   f"https://{LOCATION}-aiplatform.googleapis.com/v1/projects/{PROJECT}/locations/{LOCATION}/reasoningEngines/{req.agent_id}:query",
-    #    headers={
-    #        "Content-Type": "application/json; charset=utf-8",
-    #        "Authorization": f"Bearer {get_identity_token()}",
-    #    },
-    #    data=json.dumps({
-    #        "class_method": "query",
-    #        "input": {
-    #            "input": payload
-    #        }
-    #    })
-    #)
-
-    #r.raise_for_status()
-    #reply = r.json()
 
     reply = remote_app.query(input=payload,
         config={
@@ -120,5 +99,49 @@ def chat(req: ChatRequest):
     return ChatResponse(session_id=session_id, response=reply)
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", "8000"))
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
+    #port = int(os.getenv("PORT", "8000"))
+
+    vae_init(project=PROJECT_ID, location=LOCATION, staging_bucket=STAGING_BUCKET)
+    from google.cloud.aiplatform import initializer
+    print(vars(initializer.global_config))
+    def get_identity_token():
+        credentials, _ = google_auth.default()
+        auth_request = google_requests.Request()
+        credentials.refresh(auth_request)
+        return credentials.token
+    
+    reasoning_engine_list = reasoning_engines.ReasoningEngine.list()
+    print(reasoning_engine_list)
+    response = requests.get(
+    "https://us-central1-aiplatform.googleapis.com/v1/projects/agentcore-465415/locations/us-central1/reasoningEngines/4868980535419994112",
+        headers={
+            "Content-Type": "application/json; charset=utf-8",
+            "Authorization": f"Bearer {get_identity_token()}",
+        },
+    )
+    response.raise_for_status()
+    print(json.loads(response.content).get("spec").get("classMethods"))
+
+    resp = requests.post(
+        f"https://us-central1-aiplatform.googleapis.com/v1/projects/agentcore-465415/locations/us-central1/reasoningEngines/4868980535419994112:query",
+        headers={
+            "Content-Type": "application/json; charset=utf-8",
+            "Authorization": f"Bearer {get_identity_token()}",
+        },
+        data=json.dumps({
+            "class_method": "query",
+            "input": {
+                "input": "Give me 5 Radiohead recommendations."
+            }
+        })
+    )
+
+    resp.raise_for_status()
+    print(json.loads(resp.content))
+
+    #agent = agent_engines.get("projects/agentcore-465415/locations/us-central1/reasoningEngines/4868980535419994112")
+    #print(agent.operation_schemas())
+
+    #agent.query(input="Give me 5 Radiohead recommendations")
+
+    #uvicorn.run("main:app", host="0.0.0.0", port=port)
